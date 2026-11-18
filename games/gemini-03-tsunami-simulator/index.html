@@ -1,0 +1,2769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tsunami 3D — Real-Time Disaster Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-glass: rgba(15, 23, 42, 0.78);
+      --bg-glass-card: rgba(30, 41, 59, 0.72);
+      --border-glass: rgba(255, 255, 255, 0.12);
+      --border-accent: rgba(56, 189, 248, 0.4);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-cyan: #38bdf8;
+      --accent-blue: #0284c7;
+      --accent-danger: #ef4444;
+      --accent-warning: #f59e0b;
+      --accent-success: #10b981;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #090d16;
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--text-main);
+    }
+
+    #webgl-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      z-index: 1;
+    }
+
+    /* UI Overlay */
+    .ui-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 16px;
+    }
+
+    .interactive {
+      pointer-events: auto;
+    }
+
+    /* Glass Panels */
+    .glass-panel {
+      background: var(--bg-glass);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-glass);
+      border-radius: 14px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    /* Top Bar */
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 20px;
+      margin-bottom: 12px;
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      font-size: 26px;
+      line-height: 1;
+      filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.6));
+    }
+
+    .brand-title {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #ffffff 0%, #38bdf8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #34d399;
+      transition: all 0.3s ease;
+    }
+
+    .status-badge.alert {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.5);
+      color: #f87171;
+      animation: pulse-border 1.5s infinite;
+    }
+
+    .status-badge.warning {
+      background: rgba(245, 158, 11, 0.2);
+      border-color: rgba(245, 158, 11, 0.5);
+      color: #fbbf24;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    @keyframes pulse-border {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+      50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .icon-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--border-glass);
+      color: var(--text-main);
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 16px;
+    }
+
+    .icon-btn:hover {
+      background: rgba(255, 255, 255, 0.16);
+      border-color: var(--accent-cyan);
+    }
+
+    /* Main Content Layout */
+    .main-workspace {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex: 1;
+      gap: 16px;
+      overflow: hidden;
+    }
+
+    /* Control Panel (Left) */
+    .controls-panel {
+      width: 330px;
+      max-height: calc(100vh - 170px);
+      overflow-y: auto;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .controls-panel::-webkit-scrollbar {
+      width: 5px;
+    }
+    .controls-panel::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+    }
+
+    .panel-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Primary Start Button */
+    .btn-tsunami {
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #991b1b 100%);
+      color: #ffffff;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-tsunami:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 26px rgba(239, 68, 68, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    }
+
+    .btn-tsunami:active {
+      transform: translateY(1px);
+    }
+
+    .btn-tsunami.active {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      box-shadow: 0 6px 20px rgba(245, 158, 11, 0.5);
+    }
+
+    .btn-reset {
+      width: 100%;
+      padding: 11px;
+      border-radius: 10px;
+      border: 1px solid var(--border-glass);
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-main);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+
+    .btn-reset:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    /* Wave Height Slider */
+    .slider-box {
+      background: var(--bg-glass-card);
+      border: 1px solid var(--border-glass);
+      border-radius: 12px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    .slider-label {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .slider-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent-cyan);
+    }
+
+    .slider-val span {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 3px;
+      outline: none;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      box-shadow: 0 0 10px var(--accent-cyan);
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+
+    input[type=range]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    /* Preset Buttons */
+    .preset-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+
+    .btn-preset {
+      padding: 6px 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-glass);
+      border-radius: 6px;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-preset:hover, .btn-preset.active {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: var(--accent-cyan);
+      color: #ffffff;
+    }
+
+    /* Speed & Controls Button Group */
+    .button-group {
+      display: flex;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 8px;
+      padding: 3px;
+      border: 1px solid var(--border-glass);
+      gap: 2px;
+    }
+
+    .group-btn {
+      flex: 1;
+      padding: 7px 4px;
+      font-size: 11px;
+      font-weight: 600;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .group-btn:hover {
+      color: #ffffff;
+    }
+
+    .group-btn.active {
+      background: var(--accent-blue);
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(2, 132, 199, 0.4);
+    }
+
+    /* Dashboard Panel (Right) */
+    .dashboard-panel {
+      width: 320px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Primary Flood Gauge Card */
+    .flood-counter-card {
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.9) 100%);
+      border: 1px solid var(--border-accent);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 0 24px rgba(56, 189, 248, 0.1);
+    }
+
+    .gauge-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .gauge-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--accent-cyan);
+    }
+
+    .gauge-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: #ffffff;
+      line-height: 1;
+    }
+
+    .gauge-unit {
+      font-size: 20px;
+      color: var(--accent-cyan);
+      font-weight: 600;
+    }
+
+    /* Progress bar */
+    .progress-track {
+      width: 100%;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #38bdf8, #ef4444);
+      border-radius: 4px;
+      transition: width 0.25s ease-out;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .stat-card {
+      background: var(--bg-glass-card);
+      border: 1px solid var(--border-glass);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .stat-number {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 17px;
+      font-weight: 700;
+      color: #ffffff;
+    }
+
+    .stat-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* Graph Canvas */
+    .chart-box {
+      background: var(--bg-glass-card);
+      border: 1px solid var(--border-glass);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    #flood-canvas-graph {
+      width: 100%;
+      height: 64px;
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 6px;
+      display: block;
+    }
+
+    /* Bottom Bar & Elevation Legend */
+    .bottom-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 16px;
+    }
+
+    .legend-panel {
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .legend-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .legend-bar-container {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .legend-bar {
+      width: 240px;
+      height: 10px;
+      border-radius: 5px;
+      background: linear-gradient(90deg, 
+        #0b3a75 0%, 
+        #1d8cb8 15%, 
+        #ecd399 22%, 
+        #4ca255 35%, 
+        #a6a249 55%, 
+        #926a45 75%, 
+        #dfdada 100%
+      );
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .legend-labels {
+      display: flex;
+      justify-content: space-between;
+      width: 240px;
+      font-size: 9px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-muted);
+    }
+
+    /* Warning Banner */
+    .warning-banner {
+      position: absolute;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-20px);
+      opacity: 0;
+      pointer-events: none;
+      background: rgba(220, 38, 38, 0.92);
+      backdrop-filter: blur(8px);
+      border: 1px solid #f87171;
+      color: #ffffff;
+      padding: 10px 24px;
+      border-radius: 9999px;
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 8px 30px rgba(220, 38, 38, 0.6);
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 50;
+    }
+
+    .warning-banner.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Camera Hint */
+    .cam-hint {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.4);
+      background: rgba(0, 0, 0, 0.4);
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 1024px) {
+      .controls-panel, .dashboard-panel {
+        width: 280px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- WebGL Render Canvas -->
+  <canvas id="webgl-canvas"></canvas>
+
+  <!-- Warning Banner -->
+  <div id="warning-banner" class="warning-banner">
+    <span>⚠️</span>
+    <span id="warning-text">TSUNAMI WARNING: EVACUATE TO HIGH GROUND (+20m SHELTER)</span>
+  </div>
+
+  <!-- UI Overlay -->
+  <div class="ui-layer">
+    <!-- Top Bar -->
+    <header class="top-bar glass-panel interactive">
+      <div class="brand-section">
+        <div class="brand-logo">🌊</div>
+        <div>
+          <div class="brand-title">TSUNAMI DISASTER SIMULATOR 3D</div>
+          <div class="brand-subtitle">Real-Time Hydrodynamic Coastal Inundation Model</div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <div id="sim-status-badge" class="status-badge">
+          <div class="status-dot"></div>
+          <span id="sim-status-text">Ready / Calm</span>
+        </div>
+        <button id="sound-btn" class="icon-btn" title="Toggle Siren & Audio">🔊</button>
+        <button id="fullscreen-btn" class="icon-btn" title="Toggle Fullscreen">⛶</button>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <div class="main-workspace">
+      <!-- Left Controls Panel -->
+      <div class="controls-panel glass-panel interactive">
+        <!-- Main Actions -->
+        <div class="panel-section">
+          <button id="start-tsunami-btn" class="btn-tsunami">
+            <span>🌊</span>
+            <span id="start-btn-label">START TSUNAMI</span>
+          </button>
+          <button id="reset-sim-btn" class="btn-reset">
+            <span>↺</span>
+            <span>Reset Simulation</span>
+          </button>
+        </div>
+
+        <!-- Wave Height Configuration -->
+        <div class="panel-section">
+          <div class="section-title">
+            <span>Wave Amplitude</span>
+            <span id="wave-category-tag" style="color: var(--accent-cyan);">Cat. 3 Surge</span>
+          </div>
+          <div class="slider-box">
+            <div class="slider-header">
+              <span class="slider-label">Wave Height</span>
+              <div class="slider-val"><span id="wave-val-display">8.0</span> <span>meters</span></div>
+            </div>
+            <input type="range" id="wave-height-slider" min="1.0" max="20.0" step="0.5" value="8.0">
+            <div class="preset-grid">
+              <button class="btn-preset" data-h="3.0">3m Minor</button>
+              <button class="btn-preset active" data-h="8.0">8m Mod.</button>
+              <button class="btn-preset" data-h="13.0">13m Major</button>
+              <button class="btn-preset" data-h="20.0">20m Mega</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Simulation Speed & Controls -->
+        <div class="panel-section">
+          <div class="section-title">Simulation Speed</div>
+          <div class="button-group">
+            <button class="group-btn" data-speed="0.5">0.5x</button>
+            <button class="group-btn active" data-speed="1.0">1.0x</button>
+            <button class="group-btn" data-speed="2.0">2.0x</button>
+            <button class="group-btn" data-speed="4.0">4.0x</button>
+            <button id="pause-btn" class="group-btn" style="color: #f87171;">⏸ Pause</button>
+          </div>
+        </div>
+
+        <!-- Camera Presets -->
+        <div class="panel-section">
+          <div class="section-title">Camera Views</div>
+          <div class="button-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: transparent; border: none; padding: 0;">
+            <button class="group-btn active" data-cam="orbit" style="background: rgba(255,255,255,0.06);">🌐 Free Orbit</button>
+            <button class="group-btn" data-cam="shore" style="background: rgba(255,255,255,0.06);">🏖️ Coastline</button>
+            <button class="group-btn" data-cam="aerial" style="background: rgba(255,255,255,0.06);">🦅 Aerial Drone</button>
+            <button class="group-btn" data-cam="shelter" style="background: rgba(255,255,255,0.06);">⛰️ High Shelter</button>
+            <button class="group-btn" data-cam="vehicle" style="background: rgba(255,255,255,0.06); grid-column: span 2;">🚗 Follow Vehicle</button>
+          </div>
+        </div>
+
+        <!-- Visualization Overlays -->
+        <div class="panel-section">
+          <div class="section-title">Terrain Overlay Mode</div>
+          <div class="button-group">
+            <button class="group-btn active" data-mode="realistic">Satellite</button>
+            <button class="group-btn" data-mode="contour">Contours</button>
+            <button class="group-btn" data-mode="depth">Depth Map</button>
+            <button class="group-btn" data-mode="flow">Flow Vector</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Dashboard Panel -->
+      <div class="dashboard-panel glass-panel interactive">
+        <!-- Inundation Gauge -->
+        <div class="flood-counter-card">
+          <div class="gauge-top">
+            <span class="gauge-title">Flooded Land Area</span>
+            <span style="font-size: 11px; color: var(--text-muted);">Real-Time Sensor</span>
+          </div>
+          <div class="gauge-value">
+            <span id="flooded-pct-val">0.0</span><span class="gauge-unit">%</span>
+          </div>
+          <div class="progress-track">
+            <div id="flood-progress-bar" class="progress-fill"></div>
+          </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span class="stat-label">Peak Water Level</span>
+            <span id="peak-depth-val" class="stat-number">0.0 m</span>
+            <span class="stat-sub">Above normal sea level</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Inundation Front</span>
+            <span id="inland-dist-val" class="stat-number">0 m</span>
+            <span class="stat-sub">Distance from shore</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Flooded Buildings</span>
+            <span id="flooded-buildings-val" class="stat-number">0 / 45</span>
+            <span id="flooded-buildings-sub" class="stat-sub">0% affected</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Displaced Vehicles</span>
+            <span id="displaced-cars-val" class="stat-number">0 / 12</span>
+            <span id="displaced-cars-sub" class="stat-sub">Floated & swept</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Evacuees Safe</span>
+            <span id="evacuees-safe-val" class="stat-number" style="color: #34d399;">0 / 25</span>
+            <span class="stat-sub">Reached +12m shelter</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Persons Swept</span>
+            <span id="evacuees-swept-val" class="stat-number" style="color: #f87171;">0 / 25</span>
+            <span class="stat-sub">Caught in deep flow</span>
+          </div>
+        </div>
+
+        <!-- Mini Sparkline Graph -->
+        <div class="chart-box">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span class="stat-label">Flood Progression History</span>
+            <span id="elapsed-time-val" style="font-family: 'JetBrains Mono'; font-size: 11px; color: var(--accent-cyan);">T+ 0.0s</span>
+          </div>
+          <canvas id="flood-canvas-graph"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Bar -->
+    <div class="bottom-bar">
+      <!-- Elevation Legend -->
+      <div class="legend-panel glass-panel interactive">
+        <div class="legend-title">Elevation:</div>
+        <div class="legend-bar-container">
+          <div class="legend-bar"></div>
+          <div class="legend-labels">
+            <span>-12m Sea</span>
+            <span>0m Shore</span>
+            <span>+2.8m Wall</span>
+            <span>+5m Town</span>
+            <span>+20m Safe Shelter</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="cam-hint interactive">
+        <span>Left Click: Rotate | Right Click: Pan | Scroll: Zoom</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Three.js and OrbitControls via reliable CDNs -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <script>
+    /* ==========================================================================
+       TSUNAMI DISASTER SIMULATOR 3D — FULL ENGINE
+       ========================================================================== */
+
+    // --- Global Configuration & Constants ---
+    const Lx = 150.0;       // World length X (meters)
+    const Lz = 120.0;       // World length Z (meters)
+    const Nx = 100;         // Grid cells X
+    const Nz = 80;          // Grid cells Z
+    const dx = Lx / (Nx - 1);
+    const dz = Lz / (Nz - 1);
+    const g = 9.81;         // Gravity m/s^2
+
+    // Simulation State
+    const SIM = {
+      active: false,
+      paused: false,
+      time: 0.0,
+      simSpeed: 1.0,
+      waveHeight: 8.0,
+      elapsedReal: 0.0,
+      inundationPeak: 0.0,
+      inlandMaxDist: 0.0,
+      floodedPct: 0.0,
+      floodedBuildings: 0,
+      displacedCars: 0,
+      evacueesSafe: 0,
+      evacueesSwept: 0,
+      overlayMode: 'realistic', // 'realistic', 'contour', 'depth', 'flow'
+      cameraMode: 'orbit',
+      audioEnabled: false,
+      history: []
+    };
+
+    // Grid Buffers
+    const elev = new Float32Array(Nx * Nz);
+    const waterH = new Float32Array(Nx * Nz);
+    const waterH0 = new Float32Array(Nx * Nz); // Initial calm sea depth
+    const u = new Float32Array(Nx * Nz);
+    const v = new Float32Array(Nx * Nz);
+    const Qx = new Float32Array(Nx * Nz);
+    const Qz = new Float32Array(Nx * Nz);
+    const isOcean = new Uint8Array(Nx * Nz);
+    const isLand = new Uint8Array(Nx * Nz);
+    const blocked = new Uint8Array(Nx * Nz);
+
+    let totalLandCells = 0;
+
+    // --- Analytical Terrain Elevation Function ---
+    function calcElevation(x, z) {
+      // Ocean shelf: x < -22m
+      if (x < -22.0) {
+        const normOcean = (x + 75.0) / 53.0; // 0 at -75, 1 at -22
+        let zb = -12.0 + normOcean * 11.2;    // -12m to -0.8m
+        zb += Math.sin(x * 0.08) * Math.cos(z * 0.08) * 0.35;
+        return zb;
+      }
+
+      // Coastal Plain & Downtown: -22m <= x < 32m
+      if (x < 32.0) {
+        const normPlain = (x + 22.0) / 54.0;
+        let zb = -0.8 + normPlain * 5.8;      // -0.8m to +5.0m
+
+        // Protective seawall/berm along coast at x in [-20, -17]
+        if (x >= -20.0 && x <= -17.0) {
+          // Harbor entrance gap at river mouth (z in [-9, 9]) and docks (z in [-44, -36])
+          const inRiverGap = (z >= -9.0 && z <= 9.0);
+          const inDockGap = (z >= -44.0 && z <= -36.0);
+          if (!inRiverGap && !inDockGap) {
+            const wallShape = 1.0 - Math.pow((x - (-18.5)) / 1.5, 2);
+            zb = Math.max(zb, zb + wallShape * 2.2); // elevates to ~+2.8m
+          }
+        }
+
+        // River / Canal carving: centerline z_riv = -6.0 * sin(x * 0.05)
+        const zRiv = -6.0 * Math.sin(x * 0.05);
+        const dRiv = Math.abs(z - zRiv);
+        if (dRiv < 6.5) {
+          const depthRiv = (1.0 - Math.pow(dRiv / 6.5, 2)) * 2.3;
+          // Road bridges spanning across canal maintain road height
+          const onCoastalBridge = (x >= -15.5 && x <= -11.5);
+          const onCentralBridge = (x >= 10.5 && x <= 14.5);
+          if (!onCoastalBridge && !onCentralBridge) {
+            zb -= depthRiv;
+          }
+        }
+
+        // Road channel slight depressions (0.15m recessed)
+        const isCoastalRoad = (x >= -16.0 && x <= -12.0 && z >= -55.0 && z <= 55.0);
+        const isCentralRoad = (x >= 11.0 && x <= 15.0 && z >= -55.0 && z <= 55.0);
+        const isCrossRoad1 = (Math.abs(z - (-30.0)) <= 2.5 && x >= -16.0 && x <= 32.0);
+        const isCrossRoad2 = (Math.abs(z - (0.0)) <= 2.5 && x >= -16.0 && x <= 32.0);
+        const isCrossRoad3 = (Math.abs(z - (30.0)) <= 2.5 && x >= -16.0 && x <= 32.0);
+
+        if ((isCoastalRoad || isCentralRoad || isCrossRoad1 || isCrossRoad2 || isCrossRoad3) && zb > 0.3) {
+          zb -= 0.15;
+        }
+
+        return zb;
+      }
+
+      // Mountain Ridge & Safe Evacuation High Ground: x >= 32m
+      const normMtn = (x - 32.0) / 43.0; // 0 at 32, 1 at 75
+      let zb = 5.0 + Math.pow(normMtn, 1.3) * 14.0; // Rises smoothly to ~19m
+
+      // Evacuation Center Plateau around (x=58, z=20)
+      const dPlateau = Math.sqrt(Math.pow(x - 58.0, 2) + Math.pow(z - 20.0, 2));
+      if (dPlateau < 18.0) {
+        const hPlateau = (1.0 - Math.pow(dPlateau / 18.0, 2)) * 4.2;
+        zb += hPlateau; // Peaks around +20.5m
+      }
+
+      // Mountain peak in North-East
+      const dPeak = Math.sqrt(Math.pow(x - 65.0, 2) + Math.pow(z - 45.0, 2));
+      if (dPeak < 22.0) {
+        const hPeak = (1.0 - Math.pow(dPeak / 22.0, 2)) * 5.5;
+        zb += hPeak; // Up to +24m
+      }
+
+      return zb;
+    }
+
+    // Helper: Coordinate conversion
+    function gridToWorld(ix, iz) {
+      return {
+        x: -75.0 + ix * dx,
+        z: -60.0 + iz * dz
+      };
+    }
+
+    function worldToGrid(x, z) {
+      const gx = (x + 75.0) / dx;
+      const gz = (z + 60.0) / dz;
+      return {
+        ix: Math.max(0, Math.min(Nx - 1, Math.floor(gx))),
+        iz: Math.max(0, Math.min(Nz - 1, Math.floor(gz))),
+        fx: gx - Math.floor(gx),
+        fz: gz - Math.floor(gz)
+      };
+    }
+
+    // Bilinear field sampling
+    function sampleField(field, x, z) {
+      const gx = Math.max(0, Math.min(Nx - 1.001, (x + 75.0) / dx));
+      const gz = Math.max(0, Math.min(Nz - 1.001, (z + 60.0) / dz));
+      const ix0 = Math.floor(gx);
+      const iz0 = Math.floor(gz);
+      const ix1 = Math.min(Nx - 1, ix0 + 1);
+      const iz1 = Math.min(Nz - 1, iz0 + 1);
+      const fx = gx - ix0;
+      const fz = gz - iz0;
+
+      const v00 = field[iz0 * Nx + ix0];
+      const v10 = field[iz0 * Nx + ix1];
+      const v01 = field[iz1 * Nx + ix0];
+      const v11 = field[iz1 * Nx + ix1];
+
+      return (v00 * (1 - fx) + v10 * fx) * (1 - fz) + (v01 * (1 - fx) + v11 * fx) * fz;
+    }
+
+    // Initialize Grid Buffers
+    function initTerrainData() {
+      totalLandCells = 0;
+      for (let iz = 0; iz < Nz; iz++) {
+        for (let ix = 0; ix < Nx; ix++) {
+          const idx = iz * Nx + ix;
+          const w = gridToWorld(ix, iz);
+          const z_val = calcElevation(w.x, w.z);
+          elev[idx] = z_val;
+
+          if (z_val < 0.0) {
+            isOcean[idx] = 1;
+            isLand[idx] = 0;
+            waterH[idx] = -z_val; // Initial calm water level = 0.0
+            waterH0[idx] = -z_val;
+          } else {
+            isOcean[idx] = 0;
+            isLand[idx] = 1;
+            waterH[idx] = 0.0;
+            waterH0[idx] = 0.0;
+            totalLandCells++;
+          }
+          u[idx] = 0.0;
+          v[idx] = 0.0;
+          Qx[idx] = 0.0;
+          Qz[idx] = 0.0;
+          blocked[idx] = 0;
+        }
+      }
+    }
+
+    initTerrainData();
+
+    // --- 1. Three.js Scene, Camera, Renderer Setup ---
+    const canvas = document.getElementById('webgl-canvas');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a1120);
+    scene.fog = new THREE.FogExp2(0x132238, 0.0035);
+
+    const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.5, 1000);
+    camera.position.set(-68, 38, 62);
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      powerPreference: 'high-performance'
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.0));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.maxPolarAngle = Math.PI / 2 - 0.03; // Don't clip under ground
+    controls.minDistance = 10;
+    controls.maxDistance = 250;
+    controls.target.set(5, 5, 0);
+    controls.update();
+
+    // Lighting
+    const ambientLight = new THREE.HemisphereLight(0xd9ecff, 0x223344, 0.75);
+    scene.add(ambientLight);
+
+    const sunLight = new THREE.DirectionalLight(0xfffaed, 1.35);
+    sunLight.position.set(-70, 95, -50);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.near = 10;
+    sunLight.shadow.camera.far = 300;
+    const dDist = 85;
+    sunLight.shadow.camera.left = -dDist;
+    sunLight.shadow.camera.right = dDist;
+    sunLight.shadow.camera.top = dDist;
+    sunLight.shadow.camera.bottom = -dDist;
+    sunLight.shadow.bias = -0.0004;
+    scene.add(sunLight);
+
+    const seaFillLight = new THREE.DirectionalLight(0x38bdf8, 0.4);
+    seaFillLight.position.set(40, -10, 50);
+    scene.add(seaFillLight);
+
+    // --- 2. 3D Terrain Mesh Construction ---
+    const terrainGeo = new THREE.PlaneGeometry(Lx, Lz, Nx - 1, Nz - 1);
+    terrainGeo.rotateX(-Math.PI / 2); // Lay flat in X-Z plane
+
+    const terrainPos = terrainGeo.attributes.position;
+    const terrainColors = new Float32Array(terrainPos.count * 3);
+    terrainGeo.setAttribute('color', new THREE.BufferAttribute(terrainColors, 3));
+
+    // Colors Palette
+    const cSand = new THREE.Color(0xd8be82);
+    const cGrass = new THREE.Color(0x4a7c38);
+    const cForest = new THREE.Color(0x36582a);
+    const cRock = new THREE.Color(0x6f6b62);
+    const cMtnHigh = new THREE.Color(0x9a958b);
+    const cRoad = new THREE.Color(0x272b32);
+    const cSidewalk = new THREE.Color(0x7e838b);
+    const cRiverbed = new THREE.Color(0x3d433b);
+    const cSeawall = new THREE.Color(0x828890);
+    const cOceanBed = new THREE.Color(0x133852);
+
+    function updateTerrainColors() {
+      const mode = SIM.overlayMode;
+      const cTemp = new THREE.Color();
+
+      for (let iz = 0; iz < Nz; iz++) {
+        for (let ix = 0; ix < Nx; ix++) {
+          const idx = iz * Nx + ix;
+          const vertIdx = idx;
+          const zb = elev[idx];
+          const w = gridToWorld(ix, iz);
+          const x = w.x;
+          const z = w.z;
+
+          // Height coordinate
+          terrainPos.setY(vertIdx, zb);
+
+          if (mode === 'realistic') {
+            if (zb < -0.4) {
+              // Ocean seabed
+              const blend = Math.max(0, Math.min(1, (zb + 12) / 11));
+              cTemp.copy(cOceanBed).lerp(cSand, blend * 0.5);
+            } else if (zb < 1.4) {
+              // Beach sand
+              const blend = Math.max(0, Math.min(1, (zb + 0.4) / 1.8));
+              cTemp.copy(cSand).lerp(cGrass, blend * 0.4);
+            } else if (x >= -20 && x <= -17 && zb >= 2.0) {
+              // Concrete seawall
+              cTemp.copy(cSeawall);
+            } else {
+              // Downtown and slopes
+              const zRiv = -6.0 * Math.sin(x * 0.05);
+              const dRiv = Math.abs(z - zRiv);
+
+              // Road check
+              const isCoastalRoad = (x >= -16.0 && x <= -12.0 && z >= -55.0 && z <= 55.0);
+              const isCentralRoad = (x >= 11.0 && x <= 15.0 && z >= -55.0 && z <= 55.0);
+              const isCrossRoad1 = (Math.abs(z - (-30.0)) <= 2.5 && x >= -16.0 && x <= 32.0);
+              const isCrossRoad2 = (Math.abs(z - (0.0)) <= 2.5 && x >= -16.0 && x <= 32.0);
+              const isCrossRoad3 = (Math.abs(z - (30.0)) <= 2.5 && x >= -16.0 && x <= 32.0);
+
+              if (dRiv < 4.0 && x < 32) {
+                // Riverbed
+                cTemp.copy(cRiverbed);
+              } else if (isCoastalRoad || isCentralRoad || isCrossRoad1 || isCrossRoad2 || isCrossRoad3) {
+                // Asphalt road
+                cTemp.copy(cRoad);
+              } else if (zb < 5.5) {
+                // Low town lawns / parks
+                cTemp.copy(cGrass);
+              } else if (zb < 12.0) {
+                // Foothill forest
+                cTemp.copy(cForest);
+              } else if (zb < 18.0) {
+                // Mountain rock
+                cTemp.copy(cRock);
+              } else {
+                // High mountain crags / plateau
+                const dPlateau = Math.sqrt(Math.pow(x - 58.0, 2) + Math.pow(z - 20.0, 2));
+                if (dPlateau < 12.0) {
+                  // Shelter assembly area (green safety asphalt)
+                  cTemp.setHex(0x2f6e4a);
+                } else {
+                  cTemp.copy(cMtnHigh);
+                }
+              }
+            }
+          } else if (mode === 'contour') {
+            // Topographic Contour Striping (every 2.0 meters)
+            const normH = Math.max(0, Math.min(1, (zb + 12) / 36));
+            cTemp.setHSL(0.65 - normH * 0.7, 0.9, 0.45);
+            // Stripe modulation
+            const band = Math.abs(Math.sin(zb * Math.PI));
+            if (band < 0.18) {
+              cTemp.multiplyScalar(0.4); // Dark contour line
+            }
+          } else if (mode === 'depth') {
+            // Flood depth heatmap
+            const hVal = waterH[idx];
+            if (isOcean[idx]) {
+              cTemp.setHex(0x102a45);
+            } else if (hVal > 0.05) {
+              // Depth color ramp: yellow -> orange -> red -> purple
+              const dRatio = Math.min(1.0, hVal / 8.0);
+              cTemp.setHSL(0.18 - dRatio * 0.28, 1.0, 0.5);
+            } else {
+              cTemp.setHex(0x333b47); // Dry land
+            }
+          } else if (mode === 'flow') {
+            // Velocity flow intensity
+            const speed = Math.sqrt(u[idx] * u[idx] + v[idx] * v[idx]);
+            if (speed > 0.1) {
+              const sRatio = Math.min(1.0, speed / 12.0);
+              cTemp.setHSL(0.55 - sRatio * 0.55, 1.0, 0.55);
+            } else {
+              cTemp.setHex(0x232d3d);
+            }
+          }
+
+          terrainColors[vertIdx * 3 + 0] = cTemp.r;
+          terrainColors[vertIdx * 3 + 1] = cTemp.g;
+          terrainColors[vertIdx * 3 + 2] = cTemp.b;
+        }
+      }
+
+      terrainGeo.attributes.position.needsUpdate = true;
+      terrainGeo.attributes.color.needsUpdate = true;
+      terrainGeo.computeVertexNormals();
+    }
+
+    const terrainMat = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.88,
+      metalness: 0.08,
+      flatShading: false
+    });
+
+    const terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
+    terrainMesh.receiveShadow = true;
+    scene.add(terrainMesh);
+    updateTerrainColors();
+
+    // --- 3. Buildings & Infrastructure ---
+    const buildings = [];
+    const buildingMeshes = [];
+    const buildingWaterMarks = [];
+
+    // Helper: Register building obstacle & 3D structure
+    function createBuilding(opts) {
+      const { x, z, width, depth, height, color, roofColor, floors = 1, isHospital = false, name = "Building" } = opts;
+      const zb = sampleField(elev, x, z);
+      const halfW = width / 2;
+      const halfD = depth / 2;
+
+      // Register bounding box
+      const bData = {
+        name,
+        x, z, width, depth, height,
+        baseY: zb,
+        minX: x - halfW,
+        maxX: x + halfW,
+        minZ: z - halfD,
+        maxZ: z + halfD,
+        isHospital,
+        flooded: false,
+        maxWaterDepth: 0.0
+      };
+      buildings.push(bData);
+
+      // Block cells in simulation grid
+      const minG = worldToGrid(bData.minX, bData.minZ);
+      const maxG = worldToGrid(bData.maxX, bData.maxZ);
+      for (let iz = minG.iz; iz <= maxG.iz; iz++) {
+        for (let ix = minG.ix; ix <= maxG.ix; ix++) {
+          if (ix >= 0 && ix < Nx && iz >= 0 && iz < Nz) {
+            blocked[iz * Nx + ix] = 1;
+          }
+        }
+      }
+
+      // 3D Group
+      const bGroup = new THREE.Group();
+      bGroup.position.set(x, zb + height / 2, z);
+
+      // Main body
+      const bodyGeo = new THREE.BoxGeometry(width, height, depth);
+      const bodyMat = new THREE.MeshStandardMaterial({
+        color: color || 0xdddbd5,
+        roughness: 0.65,
+        metalness: 0.15
+      });
+      const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+      bodyMesh.castShadow = true;
+      bodyMesh.receiveShadow = true;
+      bGroup.add(bodyMesh);
+
+      // Floor windows detailing
+      if (floors > 1 && !isHospital) {
+        const winGeo = new THREE.BoxGeometry(width * 0.9, height * 0.12, depth * 1.02);
+        const winMat = new THREE.MeshStandardMaterial({
+          color: 0x1a2b3c,
+          roughness: 0.2,
+          metalness: 0.8
+        });
+        for (let f = 1; f < floors; f++) {
+          const wMesh = new THREE.Mesh(winGeo, winMat);
+          wMesh.position.y = -height / 2 + (height / floors) * f;
+          bGroup.add(wMesh);
+        }
+      }
+
+      // Roof detailing
+      if (roofColor) {
+        // Pitched roof
+        const roofGeo = new THREE.ConeGeometry(Math.max(width, depth) * 0.72, height * 0.35, 4);
+        roofGeo.rotateY(Math.PI / 4);
+        const roofMat = new THREE.MeshStandardMaterial({ color: roofColor, roughness: 0.7 });
+        const roofMesh = new THREE.Mesh(roofGeo, roofMat);
+        roofMesh.position.y = height / 2 + height * 0.175;
+        roofMesh.castShadow = true;
+        bGroup.add(roofMesh);
+      } else {
+        // Flat roof with parapet & AC chiller
+        const acGeo = new THREE.BoxGeometry(width * 0.35, height * 0.12, depth * 0.35);
+        const acMat = new THREE.MeshStandardMaterial({ color: 0x71717a, roughness: 0.6 });
+        const acMesh = new THREE.Mesh(acGeo, acMat);
+        acMesh.position.set(width * 0.15, height / 2 + height * 0.06, depth * 0.1);
+        bGroup.add(acMesh);
+      }
+
+      // Hospital / Safe Shelter Enhancements
+      if (isHospital) {
+        // Red Medical Crosses on facade
+        const crossHGeo = new THREE.BoxGeometry(2.4, 0.7, depth + 0.1);
+        const crossVGeo = new THREE.BoxGeometry(0.7, 2.4, depth + 0.1);
+        const crossMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.4 });
+        bGroup.add(new THREE.Mesh(crossHGeo, crossMat));
+        bGroup.add(new THREE.Mesh(crossVGeo, crossMat));
+
+        // Rooftop Helipad
+        const heliGeo = new THREE.CylinderGeometry(width * 0.36, width * 0.36, 0.2, 16);
+        const heliMat = new THREE.MeshStandardMaterial({ color: 0x27272a, roughness: 0.8 });
+        const heliMesh = new THREE.Mesh(heliGeo, heliMat);
+        heliMesh.position.y = height / 2 + 0.1;
+        bGroup.add(heliMesh);
+
+        // Helipad 'H'
+        const hLine1 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.22, 2.2), crossMat);
+        hLine1.position.set(-0.8, height / 2 + 0.12, 0);
+        const hLine2 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.22, 2.2), crossMat);
+        hLine2.position.set(0.8, height / 2 + 0.12, 0);
+        const hLine3 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.22, 0.3), crossMat);
+        hLine3.position.set(0, height / 2 + 0.12, 0);
+        bGroup.add(hLine1, hLine2, hLine3);
+      }
+
+      // Dynamic flood waterline indicator ring
+      const ringGeo = new THREE.BoxGeometry(width + 0.15, 0.25, depth + 0.15);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0 });
+      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+      ringMesh.position.y = -height / 2 + 0.15;
+      bGroup.add(ringMesh);
+      buildingWaterMarks.push({ ringMesh, bData });
+
+      scene.add(bGroup);
+      buildingMeshes.push(bGroup);
+      return bData;
+    }
+
+    // Populate City Buildings
+    function buildCity() {
+      // 1. Seaward & Harbor (x in [-19, -5])
+      createBuilding({ x: -15.0, z: -20.0, width: 7.0, depth: 6.0, height: 4.5, color: 0xe2e8f0, roofColor: 0x0284c7, name: "Beach Surf Cafe" });
+      createBuilding({ x: -19.0, z: 15.0, width: 4.0, depth: 4.0, height: 7.0, color: 0xfef08a, roofColor: 0xef4444, name: "Lifeguard Tower" });
+      createBuilding({ x: -10.0, z: -42.0, width: 14.0, depth: 9.0, height: 6.0, color: 0x94a3b8, name: "Harbor Warehouse" });
+      createBuilding({ x: -12.0, z: 32.0, width: 8.0, depth: 7.0, height: 5.0, color: 0xfde047, roofColor: 0xb45309, name: "Coastal Inn" });
+
+      // 2. Downtown Core (Office Towers & Apartments)
+      createBuilding({ x: 2.0, z: -15.0, width: 11.0, depth: 9.0, height: 16.0, color: 0x334155, floors: 5, name: "Commercial Tower 1" });
+      createBuilding({ x: 3.0, z: 15.0, width: 12.0, depth: 10.0, height: 19.0, color: 0x1e293b, floors: 6, name: "Financial Center" });
+      createBuilding({ x: 22.0, z: -16.0, width: 13.0, depth: 9.0, height: 12.0, color: 0xcbd5e1, floors: 4, name: "Harbor View Apartments" });
+      createBuilding({ x: 22.0, z: 15.0, width: 13.0, depth: 9.0, height: 12.0, color: 0xd1d5db, floors: 4, name: "City Plaza Condos" });
+
+      // Supermarket & Gas Station
+      createBuilding({ x: 18.0, z: 38.0, width: 15.0, depth: 11.0, height: 6.5, color: 0x059669, name: "Coastal Supermarket" });
+      createBuilding({ x: 5.0, z: -35.0, width: 11.0, depth: 8.0, height: 5.0, color: 0xd97706, name: "Highway Gas Station" });
+
+      // Residential Neighborhoods (Pitched Roof Cottages)
+      const southHouseX = [-7.0, -1.0, 5.0, 24.0, 29.0];
+      const northHouseX = [-7.0, -1.0, 5.0, 24.0, 29.0];
+      const roofColors = [0xb91c1c, 0x1d4ed8, 0x7c2d12, 0x0f766e, 0x4338ca];
+
+      southHouseX.forEach((hx, idx) => {
+        createBuilding({
+          x: hx, z: -25.5, width: 4.8, depth: 4.6, height: 4.0,
+          color: 0xf8fafc, roofColor: roofColors[idx % roofColors.length],
+          floors: 1, name: `South Cottage ${idx + 1}`
+        });
+      });
+
+      northHouseX.forEach((hx, idx) => {
+        createBuilding({
+          x: hx, z: 25.5, width: 4.8, depth: 4.6, height: 4.0,
+          color: 0xf1f5f9, roofColor: roofColors[(idx + 2) % roofColors.length],
+          floors: 1, name: `North Cottage ${idx + 1}`
+        });
+      });
+
+      // Mid-town Civic District
+      createBuilding({ x: 28.0, z: -8.0, width: 13.0, depth: 8.0, height: 7.5, color: 0xe0e7ff, floors: 2, name: "Elementary School" });
+      createBuilding({ x: 28.0, z: 8.0, width: 11.0, depth: 8.0, height: 7.0, color: 0xfecaca, floors: 2, name: "Fire & Rescue Station" });
+
+      // Additional residential villas along foothill avenue
+      for (let i = 0; i < 4; i++) {
+        createBuilding({
+          x: 27.0, z: -40.0 + i * 8.0, width: 4.5, depth: 4.5, height: 4.2,
+          color: 0xffedd5, roofColor: 0x9a3412, name: `Villa West ${i + 1}`
+        });
+        createBuilding({
+          x: 27.0, z: 42.0 - i * 8.0, width: 4.5, depth: 4.5, height: 4.2,
+          color: 0xfef9c3, roofColor: 0x15803d, name: `Villa East ${i + 1}`
+        });
+      }
+
+      // 3. High Mountain Safe Evacuation Center & Emergency Hospital (+20.5m Elevation)
+      createBuilding({
+        x: 58.0, z: 20.0, width: 22.0, depth: 15.0, height: 10.0,
+        color: 0xffffff, floors: 3, isHospital: true, name: "High Ground Disaster Evacuation Hospital"
+      });
+
+      // Evacuation Shelter Supply Storage Annex
+      createBuilding({
+        x: 58.0, z: 32.0, width: 10.0, depth: 7.0, height: 5.0,
+        color: 0xe2e8f0, floors: 1, name: "Emergency Food & Relief Depot"
+      });
+    }
+
+    buildCity();
+
+    // 4. Radio Communications Tower with Blinking Beacon Light on High Ground
+    const towerGroup = new THREE.Group();
+    towerGroup.position.set(65.0, sampleField(elev, 65.0, 28.0), 28.0);
+
+    const towerLegGeo = new THREE.CylinderGeometry(0.15, 0.45, 26.0, 4);
+    const towerMat = new THREE.MeshStandardMaterial({ color: 0xd4d4d8, metalness: 0.8, roughness: 0.2 });
+    const towerLeg = new THREE.Mesh(towerLegGeo, towerMat);
+    towerLeg.position.y = 13.0;
+    towerGroup.add(towerLeg);
+
+    // Blinking Emergency Beacon
+    const beaconGeo = new THREE.SphereGeometry(0.5, 12, 12);
+    const beaconMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+    const beaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
+    beaconMesh.position.y = 26.2;
+    towerGroup.add(beaconMesh);
+
+    const beaconLight = new THREE.PointLight(0xef4444, 2.5, 30);
+    beaconLight.position.y = 26.2;
+    towerGroup.add(beaconLight);
+
+    scene.add(towerGroup);
+
+    // 5. River Bridges (Concrete overpasses)
+    function createBridge(bx, bz, bLen, bWid) {
+      const zb = sampleField(elev, bx, bz);
+      const bGeo = new THREE.BoxGeometry(bLen, 0.4, bWid);
+      const bMat = new THREE.MeshStandardMaterial({ color: 0x3f3f46, roughness: 0.7 });
+      const bridge = new THREE.Mesh(bGeo, bMat);
+      bridge.position.set(bx, zb + 0.2, bz);
+      bridge.receiveShadow = true;
+      scene.add(bridge);
+
+      // Guardrails
+      const railGeo = new THREE.BoxGeometry(bLen, 0.6, 0.15);
+      const railMat = new THREE.MeshStandardMaterial({ color: 0xa1a1aa, metalness: 0.5 });
+      const rail1 = new THREE.Mesh(railGeo, railMat);
+      rail1.position.set(bx, zb + 0.6, bz - bWid / 2);
+      const rail2 = new THREE.Mesh(railGeo, railMat);
+      rail2.position.set(bx, zb + 0.6, bz + bWid / 2);
+      scene.add(rail1, rail2);
+    }
+
+    createBridge(-13.5, 0.0, 4.0, 6.8); // Coastal road bridge
+    createBridge(13.0, 0.0, 4.0, 6.8);  // Central downtown bridge
+
+    // 6. Harbor Dock & Mooring Pier
+    const dockGeo = new THREE.BoxGeometry(14.0, 0.8, 4.5);
+    const dockMat = new THREE.MeshStandardMaterial({ color: 0x78716c, roughness: 0.9 });
+    const dockMesh = new THREE.Mesh(dockGeo, dockMat);
+    dockMesh.position.set(-22.0, 0.5, -34.0);
+    dockMesh.receiveShadow = true;
+    scene.add(dockMesh);
+
+    // 7. Trees & Foliage (Coastal Palms and Mountain Pines)
+    const treeGeoTrunk = new THREE.CylinderGeometry(0.12, 0.18, 2.2, 5);
+    const treeMatTrunk = new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.9 });
+    const palmGeoFoliage = new THREE.ConeGeometry(1.6, 1.8, 6);
+    const pineGeoFoliage = new THREE.ConeGeometry(1.3, 3.2, 6);
+    const palmMat = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.8 });
+    const pineMat = new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.8 });
+
+    // Plant trees
+    for (let t = 0; t < 55; t++) {
+      const tx = (Math.random() - 0.5) * 130;
+      const tz = (Math.random() - 0.5) * 105;
+      const zb = sampleField(elev, tx, tz);
+
+      // Check not inside buildings or deep ocean
+      if (zb > 0.4) {
+        let inside = false;
+        for (const b of buildings) {
+          if (tx >= b.minX - 1.5 && tx <= b.maxX + 1.5 && tz >= b.minZ - 1.5 && tz <= b.maxZ + 1.5) {
+            inside = true;
+            break;
+          }
+        }
+        if (!inside) {
+          const tGroup = new THREE.Group();
+          tGroup.position.set(tx, zb, tz);
+          const trunk = new THREE.Mesh(treeGeoTrunk, treeMatTrunk);
+          trunk.position.y = 1.1;
+          trunk.castShadow = true;
+          tGroup.add(trunk);
+
+          if (tx < 20) {
+            // Palm
+            const crown = new THREE.Mesh(palmGeoFoliage, palmMat);
+            crown.position.y = 2.4;
+            crown.castShadow = true;
+            tGroup.add(crown);
+          } else {
+            // Pine
+            const crown = new THREE.Mesh(pineGeoFoliage, pineMat);
+            crown.position.y = 2.8;
+            crown.castShadow = true;
+            tGroup.add(crown);
+          }
+          scene.add(tGroup);
+        }
+      }
+    }
+
+    // --- 4. Movable 3D Vehicles & Physics ---
+    const vehicles = [];
+
+    // Helper: Create 3D vehicle model
+    function createVehicleMesh(type, colorHex) {
+      const vGroup = new THREE.Group();
+
+      if (type === 'boat') {
+        // Hull
+        const hullGeo = new THREE.BoxGeometry(2.2, 0.9, 4.6);
+        const hullMat = new THREE.MeshStandardMaterial({ color: colorHex || 0xffffff, roughness: 0.5 });
+        const hull = new THREE.Mesh(hullGeo, hullMat);
+        hull.castShadow = true;
+        vGroup.add(hull);
+
+        // Cabin
+        const cabGeo = new THREE.BoxGeometry(1.6, 1.0, 1.8);
+        const cabMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.3 });
+        const cab = new THREE.Mesh(cabGeo, cabMat);
+        cab.position.set(0, 0.8, -0.3);
+        cab.castShadow = true;
+        vGroup.add(cab);
+
+        return vGroup;
+      }
+
+      // Automobile Body
+      const isBus = (type === 'bus');
+      const isVan = (type === 'van');
+      const isPolice = (type === 'police');
+
+      const bLen = isBus ? 7.5 : (isVan ? 4.8 : 3.8);
+      const bWid = isBus ? 2.3 : (isVan ? 2.0 : 1.7);
+      const bHgt = isBus ? 2.4 : (isVan ? 1.9 : 1.2);
+
+      // Chassis / Lower body
+      const bodyGeo = new THREE.BoxGeometry(bWid, bHgt * 0.5, bLen);
+      const bodyMat = new THREE.MeshStandardMaterial({
+        color: isPolice ? 0x111827 : (isBus ? 0xeab308 : colorHex),
+        roughness: 0.4,
+        metalness: 0.2
+      });
+      const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+      bodyMesh.position.y = bHgt * 0.35;
+      bodyMesh.castShadow = true;
+      vGroup.add(bodyMesh);
+
+      // Cabin / Glass
+      const cabLen = isBus ? bLen * 0.95 : bLen * 0.55;
+      const cabWid = bWid * 0.88;
+      const cabHgt = bHgt * 0.55;
+      const cabGeo = new THREE.BoxGeometry(cabWid, cabHgt, cabLen);
+      const cabMat = new THREE.MeshStandardMaterial({
+        color: isPolice ? 0xf8fafc : 0x1e293b,
+        roughness: 0.2,
+        metalness: 0.8
+      });
+      const cabMesh = new THREE.Mesh(cabGeo, cabMat);
+      cabMesh.position.set(0, bHgt * 0.35 + cabHgt * 0.8, isBus ? 0 : -bLen * 0.08);
+      cabMesh.castShadow = true;
+      vGroup.add(cabMesh);
+
+      // Police Light Bar
+      if (isPolice) {
+        const sirenGeo = new THREE.BoxGeometry(0.8, 0.18, 0.3);
+        const sirenMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+        const sirenMesh = new THREE.Mesh(sirenGeo, sirenMat);
+        sirenMesh.position.set(0, bHgt * 0.35 + cabHgt * 1.4, -bLen * 0.08);
+        vGroup.add(sirenMesh);
+      }
+
+      // Wheels
+      const wheelGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.25, 10);
+      wheelGeo.rotateZ(Math.PI / 2);
+      const wheelMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.9 });
+
+      const wX = bWid * 0.48;
+      const wZ = bLen * 0.32;
+      const wheelOffsets = [
+        [-wX, 0.35, -wZ],
+        [wX, 0.35, -wZ],
+        [-wX, 0.35, wZ],
+        [wX, 0.35, wZ]
+      ];
+      wheelOffsets.forEach(pos => {
+        const wm = new THREE.Mesh(wheelGeo, wheelMat);
+        wm.position.set(...pos);
+        vGroup.add(wm);
+      });
+
+      return vGroup;
+    }
+
+    // Register Vehicle Class
+    class SimVehicle {
+      constructor(opts) {
+        this.type = opts.type || 'car';
+        this.color = opts.color || 0xef4444;
+        this.x0 = opts.x;
+        this.z0 = opts.z;
+        this.yaw0 = opts.yaw || 0.0;
+        this.radius = opts.radius || 1.6;
+        this.mass = opts.mass || 1400.0; // kg
+
+        this.x = this.x0;
+        this.z = this.z0;
+        this.y = sampleField(elev, this.x, this.z);
+        this.vx = 0.0;
+        this.vz = 0.0;
+        this.vy = 0.0;
+        this.yaw = this.yaw0;
+        this.pitch = 0.0;
+        this.roll = 0.0;
+
+        this.isFloating = false;
+        this.isDisplaced = false;
+
+        this.mesh = createVehicleMesh(this.type, this.color);
+        this.mesh.position.set(this.x, this.y, this.z);
+        this.mesh.rotation.y = this.yaw;
+        scene.add(this.mesh);
+      }
+
+      reset() {
+        this.x = this.x0;
+        this.z = this.z0;
+        this.y = sampleField(elev, this.x, this.z);
+        this.vx = 0.0;
+        this.vz = 0.0;
+        this.vy = 0.0;
+        this.yaw = this.yaw0;
+        this.pitch = 0.0;
+        this.roll = 0.0;
+        this.isFloating = false;
+        this.isDisplaced = false;
+
+        this.mesh.position.set(this.x, this.y, this.z);
+        this.mesh.rotation.set(0, this.yaw, 0);
+      }
+
+      update(dt) {
+        const zb = sampleField(elev, this.x, this.z);
+        const hVal = sampleField(waterH, this.x, this.z);
+        const uVal = sampleField(u, this.x, this.z);
+        const vVal = sampleField(v, this.x, this.z);
+
+        const dMove = Math.sqrt(Math.pow(this.x - this.x0, 2) + Math.pow(this.z - this.z0, 2));
+        if (dMove > 1.8) {
+          this.isDisplaced = true;
+        }
+
+        // 1. Dry or very shallow ground interaction
+        if (hVal < 0.22 && this.type !== 'boat') {
+          this.isFloating = false;
+          this.y = zb;
+          this.vx *= 0.82;
+          this.vz *= 0.82;
+          this.pitch *= 0.85;
+          this.roll *= 0.85;
+        } else {
+          // 2. Buoyancy & Hydrodynamic Forces
+          const submersion = Math.min(1.2, Math.max(0.0, (hVal - 0.2) / 1.0));
+          const relU = uVal - this.vx;
+          const relV = vVal - this.vz;
+          const relSpeed = Math.sqrt(relU * relU + relV * relV);
+
+          // Hydrodynamic drag force
+          const dragMultiplier = 2800.0 * submersion;
+          const fx = dragMultiplier * relU * (relSpeed + 0.4);
+          const fz = dragMultiplier * relV * (relSpeed + 0.4);
+
+          // Residual tire ground contact friction
+          const frictionFactor = Math.max(0.0, 1.0 - submersion * 1.15) * 4500.0;
+          const netFx = fx - frictionFactor * this.vx;
+          const netFz = fz - frictionFactor * this.vz;
+
+          // Acceleration
+          this.vx += (netFx / this.mass) * dt;
+          this.vz += (netFz / this.mass) * dt;
+
+          // Velocity cap for numerical stability
+          const curSpeed = Math.sqrt(this.vx * this.vx + this.vz * this.vz);
+          if (curSpeed > 16.0) {
+            this.vx = (this.vx / curSpeed) * 16.0;
+            this.vz = (this.vz / curSpeed) * 16.0;
+          }
+
+          // Displace position
+          this.x += this.vx * dt;
+          this.z += this.vz * dt;
+
+          // Vertical floating & bobbing
+          if (submersion > 0.35 || this.type === 'boat') {
+            this.isFloating = true;
+            const bobbing = Math.sin(SIM.time * 4.0 + this.x) * 0.12 * Math.min(1.0, hVal);
+            const targetY = zb + hVal - 0.35 + bobbing;
+            this.y += (targetY - this.y) * 0.15;
+
+            // Flow torque: turns vehicle to align with current
+            if (relSpeed > 0.3) {
+              const targetYaw = Math.atan2(vVal, uVal);
+              let diffYaw = targetYaw - this.yaw;
+              diffYaw = THREE.MathUtils.euclideanModulo(diffYaw + Math.PI, Math.PI * 2) - Math.PI;
+              this.yaw += diffYaw * 1.8 * dt;
+            }
+
+            // Tilt with wave slope
+            this.pitch = Math.sin(SIM.time * 3.0 + this.z) * 0.15;
+            this.roll = Math.cos(SIM.time * 3.5 + this.x) * 0.15;
+          } else {
+            this.y = zb;
+          }
+        }
+
+        // 3. Building Obstacle Collisions (AABB)
+        for (let i = 0; i < buildings.length; i++) {
+          const b = buildings[i];
+          const pad = this.radius;
+          if (this.x > b.minX - pad && this.x < b.maxX + pad && this.z > b.minZ - pad && this.z < b.maxZ + pad) {
+            const dLeft = this.x - (b.minX - pad);
+            const dRight = (b.maxX + pad) - this.x;
+            const dTop = this.z - (b.minZ - pad);
+            const dBottom = (b.maxZ + pad) - this.z;
+
+            const minPen = Math.min(dLeft, dRight, dTop, dBottom);
+            if (minPen === dLeft) {
+              this.x = b.minX - pad;
+              this.vx = -Math.abs(this.vx) * 0.25;
+            } else if (minPen === dRight) {
+              this.x = b.maxX + pad;
+              this.vx = Math.abs(this.vx) * 0.25;
+            } else if (minPen === dTop) {
+              this.z = b.minZ - pad;
+              this.vz = -Math.abs(this.vz) * 0.25;
+            } else {
+              this.z = b.maxZ + pad;
+              this.vz = Math.abs(this.vz) * 0.25;
+            }
+          }
+        }
+
+        // Map boundary clamping
+        this.x = Math.max(-72.0, Math.min(72.0, this.x));
+        this.z = Math.max(-56.0, Math.min(56.0, this.z));
+
+        // Sync 3D Mesh
+        this.mesh.position.set(this.x, this.y, this.z);
+        this.mesh.rotation.set(this.pitch, this.yaw, this.roll);
+      }
+    }
+
+    function initVehicles() {
+      vehicles.push(new SimVehicle({ type: 'car', color: 0xef4444, x: -13.0, z: 20.0, yaw: 0.0 }));          // Beachfront Red Sedan
+      vehicles.push(new SimVehicle({ type: 'car', color: 0x94a3b8, x: -14.0, z: -13.0, yaw: Math.PI / 2 })); // Silver SUV near beach cafe
+      vehicles.push(new SimVehicle({ type: 'van', color: 0xffffff, x: -8.0, z: -34.0, yaw: 0.0 }));           // Delivery Van outside warehouse
+      vehicles.push(new SimVehicle({ type: 'bus', color: 0xeab308, x: -14.0, z: 5.0, yaw: Math.PI }));       // Yellow School Bus
+      vehicles.push(new SimVehicle({ type: 'police', color: 0x000000, x: 13.0, z: 10.0, yaw: -Math.PI / 2 }));// Police Cruiser downtown
+      vehicles.push(new SimVehicle({ type: 'car', color: 0x2563eb, x: 18.0, z: 30.0, yaw: 0.0 }));          // Blue Sedan at supermarket
+      vehicles.push(new SimVehicle({ type: 'car', color: 0x16a34a, x: 13.0, z: -2.0, yaw: Math.PI }));       // Green Pickup on bridge
+      vehicles.push(new SimVehicle({ type: 'car', color: 0x1e293b, x: 6.0, z: 0.0, yaw: Math.PI / 2 }));      // Black Sedan central road
+      vehicles.push(new SimVehicle({ type: 'car', color: 0xf97316, x: 13.0, z: -25.0, yaw: 0.0 }));         // Orange Compact downtown
+      vehicles.push(new SimVehicle({ type: 'van', color: 0xdc2626, x: 27.0, z: 2.0, yaw: Math.PI / 4 }));    // Ambulance at Fire Station
+      vehicles.push(new SimVehicle({ type: 'boat', color: 0xf8fafc, x: -24.0, z: -36.0, yaw: 0.2 }));         // Moored Fishing Boat 1
+      vehicles.push(new SimVehicle({ type: 'boat', color: 0x38bdf8, x: -26.0, z: -30.0, yaw: -0.3 }));        // Harbor Boat 2
+    }
+
+    initVehicles();
+
+    // --- 5. Pedestrian Evacuees System (25 Agents) ---
+    const evacuees = [];
+    const evacueeGeoHead = new THREE.SphereGeometry(0.2, 8, 8);
+    const evacueeGeoBody = new THREE.CylinderGeometry(0.18, 0.22, 0.8, 8);
+    const evacueeMatFleeing = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.5 });
+    const evacueeMatSafe = new THREE.MeshStandardMaterial({ color: 0x10b981, roughness: 0.5 });
+    const evacueeMatSwept = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.5 });
+
+    class SimEvacuee {
+      constructor(x, z) {
+        this.x0 = x;
+        this.z0 = z;
+        this.x = x;
+        this.z = z;
+        this.y = sampleField(elev, x, z);
+        this.speed = 3.2 + Math.random() * 0.8; // Run speed m/s
+        this.state = 'idle'; // 'idle', 'fleeing', 'safe', 'swept'
+        this.targetX = 58.0 + (Math.random() - 0.5) * 8.0;
+        this.targetZ = 20.0 + (Math.random() - 0.5) * 8.0;
+
+        this.group = new THREE.Group();
+        this.bodyMesh = new THREE.Mesh(evacueeGeoBody, evacueeMatFleeing);
+        this.bodyMesh.position.y = 0.4;
+        this.headMesh = new THREE.Mesh(evacueeGeoHead, evacueeMatFleeing);
+        this.headMesh.position.y = 0.95;
+
+        this.group.add(this.bodyMesh, this.headMesh);
+        this.group.position.set(this.x, this.y, this.z);
+        scene.add(this.group);
+      }
+
+      reset() {
+        this.x = this.x0;
+        this.z = this.z0;
+        this.y = sampleField(elev, this.x, this.z);
+        this.state = 'idle';
+        this.bodyMesh.material = evacueeMatFleeing;
+        this.headMesh.material = evacueeMatFleeing;
+        this.group.position.set(this.x, this.y, this.z);
+        this.group.rotation.set(0, 0, 0);
+      }
+
+      update(dt) {
+        const zb = sampleField(elev, this.x, this.z);
+        const hVal = sampleField(waterH, this.x, this.z);
+        const uVal = sampleField(u, this.x, this.z);
+        const vVal = sampleField(v, this.x, this.z);
+
+        if (hVal > 0.55 && (Math.abs(uVal) > 0.6 || Math.abs(vVal) > 0.6)) {
+          this.state = 'swept';
+          this.bodyMesh.material = evacueeMatSwept;
+          this.headMesh.material = evacueeMatSwept;
+          this.x += uVal * dt;
+          this.z += vVal * dt;
+          this.y = zb + hVal - 0.2;
+          this.group.rotation.x = Math.PI / 2.5;
+        } else if (this.state === 'swept') {
+          if (hVal > 0.3) {
+            this.x += uVal * dt;
+            this.z += vVal * dt;
+            this.y = zb + hVal - 0.2;
+          } else {
+            this.y = zb;
+          }
+        } else {
+          if (SIM.active && this.state !== 'safe') {
+            this.state = 'fleeing';
+            this.bodyMesh.material = evacueeMatFleeing;
+            this.headMesh.material = evacueeMatFleeing;
+
+            if (zb >= 12.0) {
+              this.state = 'safe';
+              this.bodyMesh.material = evacueeMatSafe;
+              this.headMesh.material = evacueeMatSafe;
+            } else {
+              const toX = this.targetX - this.x;
+              const toZ = this.targetZ - this.z;
+              const dist = Math.sqrt(toX * toX + toZ * toZ);
+              if (dist > 1.0) {
+                this.x += (toX / dist) * this.speed * dt;
+                this.z += (toZ / dist) * this.speed * dt;
+                this.group.rotation.y = Math.atan2(toX, toZ);
+              }
+            }
+          }
+          this.y = zb;
+          this.group.rotation.x = 0;
+        }
+
+        this.group.position.set(this.x, this.y, this.z);
+      }
+    }
+
+    function initEvacuees() {
+      const spawns = [
+        [-16.0, -10.0], [-15.0, -5.0], [-17.0, 8.0], [-16.0, 18.0], [-14.0, 25.0],
+        [-5.0, -20.0], [0.0, -10.0], [5.0, -5.0], [8.0, 5.0], [6.0, 15.0],
+        [15.0, -20.0], [14.0, -8.0], [16.0, 8.0], [15.0, 20.0], [18.0, 26.0],
+        [24.0, -12.0], [25.0, 2.0], [26.0, 12.0], [27.0, 22.0],
+        [35.0, -5.0], [38.0, 10.0], [42.0, 16.0], [46.0, 22.0],
+        [54.0, 18.0], [56.0, 24.0]
+      ];
+
+      spawns.forEach(pos => {
+        evacuees.push(new SimEvacuee(pos[0], pos[1]));
+      });
+    }
+
+    initEvacuees();
+
+    // --- 6. Web Audio API Civil Defense Siren & Ocean Rumble Synthesizer ---
+    let audioCtx = null;
+    let sirenOsc = null;
+    let sirenMod = null;
+    let sirenGain = null;
+    let oceanNoiseNode = null;
+    let oceanGain = null;
+
+    function initAudio() {
+      if (audioCtx) return;
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContext();
+
+        sirenOsc = audioCtx.createOscillator();
+        sirenOsc.type = 'sawtooth';
+        sirenOsc.frequency.setValueAtTime(480, audioCtx.currentTime);
+
+        sirenMod = audioCtx.createOscillator();
+        sirenMod.frequency.setValueAtTime(0.2, audioCtx.currentTime);
+        const modGain = audioCtx.createGain();
+        modGain.gain.setValueAtTime(180, audioCtx.currentTime);
+        sirenMod.connect(modGain);
+        modGain.connect(sirenOsc.frequency);
+
+        sirenGain = audioCtx.createGain();
+        sirenGain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+
+        const sirenFilter = audioCtx.createBiquadFilter();
+        sirenFilter.type = 'lowpass';
+        sirenFilter.frequency.setValueAtTime(1200, audioCtx.currentTime);
+
+        sirenOsc.connect(sirenFilter);
+        sirenFilter.connect(sirenGain);
+        sirenGain.connect(audioCtx.destination);
+
+        sirenOsc.start();
+        sirenMod.start();
+
+        const bufferSize = audioCtx.sampleRate * 2;
+        const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        let b0 = 0, b1 = 0, b2 = 0;
+        for (let i = 0; i < bufferSize; i++) {
+          const white = Math.random() * 2 - 1;
+          b0 = 0.99 * b0 + white * 0.05;
+          b1 = 0.96 * b1 + white * 0.11;
+          b2 = 0.86 * b2 + white * 0.25;
+          output[i] = (b0 + b1 + b2) * 0.5;
+        }
+
+        const whiteNoise = audioCtx.createBufferSource();
+        whiteNoise.buffer = noiseBuffer;
+        whiteNoise.loop = true;
+
+        const noiseFilter = audioCtx.createBiquadFilter();
+        noiseFilter.type = 'lowpass';
+        noiseFilter.frequency.setValueAtTime(280, audioCtx.currentTime);
+
+        oceanGain = audioCtx.createGain();
+        oceanGain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+
+        whiteNoise.connect(noiseFilter);
+        noiseFilter.connect(oceanGain);
+        oceanGain.connect(audioCtx.destination);
+
+        whiteNoise.start();
+      } catch (err) {
+        console.warn("Web Audio initialization skipped:", err);
+      }
+    }
+
+    function updateAudioVolume() {
+      if (!audioCtx) return;
+      if (!SIM.audioEnabled) {
+        if (sirenGain) sirenGain.gain.setTargetAtTime(0.0001, audioCtx.currentTime, 0.1);
+        if (oceanGain) oceanGain.gain.setTargetAtTime(0.0001, audioCtx.currentTime, 0.1);
+        return;
+      }
+
+      if (SIM.active) {
+        const sirenVol = SIM.time < 28.0 ? 0.18 : 0.0001;
+        if (sirenGain) sirenGain.gain.setTargetAtTime(sirenVol, audioCtx.currentTime, 0.2);
+
+        const surgeVol = Math.min(0.35, 0.08 + (SIM.floodedPct / 100.0) * 0.28);
+        if (oceanGain) oceanGain.gain.setTargetAtTime(surgeVol, audioCtx.currentTime, 0.3);
+      } else {
+        if (sirenGain) sirenGain.gain.setTargetAtTime(0.0001, audioCtx.currentTime, 0.2);
+        if (oceanGain) oceanGain.gain.setTargetAtTime(0.03, audioCtx.currentTime, 0.3);
+      }
+    }
+
+    // --- 7. Dynamic 3D Water Surface Mesh & Foam Particles ---
+    const waterGeo = new THREE.PlaneGeometry(Lx, Lz, Nx - 1, Nz - 1);
+    waterGeo.rotateX(-Math.PI / 2);
+
+    const waterPos = waterGeo.attributes.position;
+    const waterColors = new Float32Array(waterPos.count * 3);
+    waterGeo.setAttribute('color', new THREE.BufferAttribute(waterColors, 3));
+
+    const waterMat = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.84,
+      roughness: 0.12,
+      metalness: 0.25,
+      flatShading: false,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+
+    const waterMesh = new THREE.Mesh(waterGeo, waterMat);
+    scene.add(waterMesh);
+
+    // Dynamic Foam & Splash Particle System (400 dynamic particles)
+    const particleCount = 400;
+    const particleGeo = new THREE.BufferGeometry();
+    const particlePositions = new Float32Array(particleCount * 3);
+    const particleVels = new Float32Array(particleCount * 3);
+    const particleLifes = new Float32Array(particleCount);
+
+    for (let p = 0; p < particleCount; p++) {
+      particlePositions[p * 3 + 0] = 0;
+      particlePositions[p * 3 + 1] = -100; // inactive underground
+      particlePositions[p * 3 + 2] = 0;
+      particleLifes[p] = 0.0;
+    }
+
+    particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    const particleMat = new THREE.PointsMaterial({
+      color: 0xffffff,
+      size: 1.2,
+      transparent: true,
+      opacity: 0.85,
+      blending: THREE.AdditiveBlending
+    });
+    const particleSystem = new THREE.Points(particleGeo, particleMat);
+    scene.add(particleSystem);
+
+    function spawnSplash(x, y, z, vx, vz) {
+      for (let p = 0; p < particleCount; p++) {
+        if (particleLifes[p] <= 0) {
+          particlePositions[p * 3 + 0] = x + (Math.random() - 0.5) * 1.5;
+          particlePositions[p * 3 + 1] = y + Math.random() * 0.5;
+          particlePositions[p * 3 + 2] = z + (Math.random() - 0.5) * 1.5;
+          particleVels[p * 3 + 0] = vx * 0.4 + (Math.random() - 0.5) * 3.0;
+          particleVels[p * 3 + 1] = 2.0 + Math.random() * 4.5;
+          particleVels[p * 3 + 2] = vz * 0.4 + (Math.random() - 0.5) * 3.0;
+          particleLifes[p] = 0.8 + Math.random() * 0.6;
+          break;
+        }
+      }
+    }
+
+    function updateParticles(dt) {
+      const pos = particleGeo.attributes.position.array;
+      for (let p = 0; p < particleCount; p++) {
+        if (particleLifes[p] > 0) {
+          particleLifes[p] -= dt;
+          particleVels[p * 3 + 1] -= 9.81 * dt; // gravity
+          pos[p * 3 + 0] += particleVels[p * 3 + 0] * dt;
+          pos[p * 3 + 1] += particleVels[p * 3 + 1] * dt;
+          pos[p * 3 + 2] += particleVels[p * 3 + 2] * dt;
+          if (particleLifes[p] <= 0) {
+            pos[p * 3 + 1] = -100;
+          }
+        }
+      }
+      particleGeo.attributes.position.needsUpdate = true;
+    }
+
+    // --- 8. 2D Hydrodynamic Shallow Water Wave Propagation Engine ---
+    function stepHydrodynamics(dt) {
+      if (!SIM.active) {
+        // Calm sea baseline: zero velocities, h = waterH0
+        for (let i = 0; i < Nx * Nz; i++) {
+          u[i] = 0;
+          v[i] = 0;
+          Qx[i] = 0;
+          Qz[i] = 0;
+        }
+        return;
+      }
+
+      SIM.time += dt;
+
+      // --- Boundary Condition: Incoming Solitary Tsunami Surge at x_min (ix = 0, 1, 2) ---
+      const t = SIM.time;
+      let surgeHeight = 0.0;
+
+      if (t < 28.0) {
+        // Solitary wave bore: crest arrives at ~4.5s
+        const phase = (t - 4.5) / 2.2;
+        const sech = 1.0 / Math.cosh(phase);
+        const solitarySurge = SIM.waveHeight * sech * sech;
+
+        // Drawdown before surge (characteristic ocean drawback)
+        const drawPhase = (t - 1.2) / 1.5;
+        const drawSech = 1.0 / Math.cosh(drawPhase);
+        const drawDown = -0.15 * SIM.waveHeight * drawSech * drawSech;
+
+        // Secondary trailing bore
+        const trailing = (t > 7.0 && t < 22.0) ? SIM.waveHeight * 0.28 * Math.sin((t - 7.0) * 0.35) : 0.0;
+
+        surgeHeight = Math.max(-0.5 * SIM.waveHeight, solitarySurge + drawDown + trailing);
+      } else {
+        // Gradual recession
+        const recede = Math.max(0.0, 1.0 - (t - 28.0) / 20.0);
+        surgeHeight = SIM.waveHeight * 0.15 * recede;
+      }
+
+      // Impose boundary condition at sea boundary
+      for (let iz = 0; iz < Nz; iz++) {
+        for (let ix = 0; ix < 3; ix++) {
+          const idx = iz * Nx + ix;
+          const normalOceanDepth = Math.max(0.0, -elev[idx]);
+          waterH[idx] = Math.max(0.0, normalOceanDepth + surgeHeight);
+          // Wave speed c = sqrt(g * h)
+          if (surgeHeight > 0.1) {
+            const waveC = Math.sqrt(g * Math.max(0.1, waterH[idx]));
+            u[idx] = waveC * 0.68;
+          }
+        }
+      }
+
+      // Precompute free surface elevation eta = zb + h
+      const eta = new Float32Array(Nx * Nz);
+      for (let i = 0; i < Nx * Nz; i++) {
+        eta[i] = elev[i] + waterH[i];
+      }
+
+      // --- Compute Staggered Fluxes Qx and Qz ---
+      // X-Flux: between cell (ix, iz) and (ix+1, iz)
+      for (let iz = 0; iz < Nz; iz++) {
+        for (let ix = 0; ix < Nx - 1; ix++) {
+          const idxL = iz * Nx + ix;
+          const idxR = iz * Nx + (ix + 1);
+
+          // Building obstacle check: no flow across building walls
+          if (blocked[idxL] || blocked[idxR]) {
+            Qx[idxL] = 0.0;
+            continue;
+          }
+
+          const hL = waterH[idxL];
+          const hR = waterH[idxR];
+          const etaL = eta[idxL];
+          const etaR = eta[idxR];
+          const zbL = elev[idxL];
+          const zbR = elev[idxR];
+
+          // Hydrostatic head difference
+          const deltaEta = etaL - etaR;
+
+          // Flow can only occur if upstream surface is above downstream terrain bed!
+          // This strictly guarantees water never leaks uphill into dry elevated cells.
+          const maxBed = Math.max(zbL, zbR);
+          const maxEta = Math.max(etaL, etaR);
+
+          if (maxEta > maxBed && (hL > 0.005 || hR > 0.005)) {
+            // Flow acceleration from pressure gradient
+            const accel = (g * deltaEta / dx);
+
+            // Manning bottom friction
+            const effH = Math.max(0.1, Math.min(hL, hR));
+            const dragCoeff = (0.025 * 0.025 * g) / Math.pow(effH, 4.0 / 3.0);
+            const frictionDecay = Math.max(0.7, 1.0 - dragCoeff * Math.abs(Qx[idxL]) * dt);
+
+            let newQ = (Qx[idxL] + accel * dt) * frictionDecay;
+
+            // Clamp max velocity
+            const maxQ = 18.0;
+            newQ = Math.max(-maxQ, Math.min(maxQ, newQ));
+
+            // Upwind mass check: don't draw from dry cells
+            if (newQ > 0 && hL <= 0.005) newQ = 0.0;
+            if (newQ < 0 && hR <= 0.005) newQ = 0.0;
+
+            Qx[idxL] = newQ;
+          } else {
+            Qx[idxL] = 0.0;
+          }
+        }
+      }
+
+      // Z-Flux: between cell (ix, iz) and (ix, iz+1)
+      for (let iz = 0; iz < Nz - 1; iz++) {
+        for (let ix = 0; ix < Nx; ix++) {
+          const idxB = iz * Nx + ix;
+          const idxT = (iz + 1) * Nx + ix;
+
+          if (blocked[idxB] || blocked[idxT]) {
+            Qz[idxB] = 0.0;
+            continue;
+          }
+
+          const hB = waterH[idxB];
+          const hT = waterH[idxT];
+          const etaB = eta[idxB];
+          const etaT = eta[idxT];
+          const zbB = elev[idxB];
+          const zbT = elev[idxT];
+
+          const deltaEta = etaB - etaT;
+          const maxBed = Math.max(zbB, zbT);
+          const maxEta = Math.max(etaB, etaT);
+
+          if (maxEta > maxBed && (hB > 0.005 || hT > 0.005)) {
+            const accel = (g * deltaEta / dz);
+            const effH = Math.max(0.1, Math.min(hB, hT));
+            const dragCoeff = (0.025 * 0.025 * g) / Math.pow(effH, 4.0 / 3.0);
+            const frictionDecay = Math.max(0.7, 1.0 - dragCoeff * Math.abs(Qz[idxB]) * dt);
+
+            let newQ = (Qz[idxB] + accel * dt) * frictionDecay;
+            const maxQ = 18.0;
+            newQ = Math.max(-maxQ, Math.min(maxQ, newQ));
+
+            if (newQ > 0 && hB <= 0.005) newQ = 0.0;
+            if (newQ < 0 && hT <= 0.005) newQ = 0.0;
+
+            Qz[idxB] = newQ;
+          } else {
+            Qz[idxB] = 0.0;
+          }
+        }
+      }
+
+      // --- Mass Conservation & Depth Updates ---
+      for (let iz = 1; iz < Nz - 1; iz++) {
+        for (let ix = 2; ix < Nx - 1; ix++) {
+          const idx = iz * Nx + ix;
+
+          if (blocked[idx]) {
+            waterH[idx] = 0.0;
+            u[idx] = 0.0;
+            v[idx] = 0.0;
+            continue;
+          }
+
+          const qxIn = Qx[iz * Nx + (ix - 1)];
+          const qxOut = Qx[idx];
+          const qzIn = Qz[(iz - 1) * Nx + ix];
+          const qzOut = Qz[idx];
+
+          // Continuity divergence
+          const div = (qxOut - qxIn) / dx + (qzOut - qzIn) / dz;
+          let newH = waterH[idx] - div * dt;
+
+          // Absolute non-negativity guarantee
+          newH = Math.max(0.0, newH);
+          waterH[idx] = newH;
+
+          // Local cell flow velocities
+          if (newH > 0.01) {
+            u[idx] = 0.5 * (qxIn + qxOut);
+            v[idx] = 0.5 * (qzIn + qzOut);
+          } else {
+            u[idx] = 0.0;
+            v[idx] = 0.0;
+          }
+        }
+      }
+    }
+
+    // --- 9. Dynamic Water Surface 3D Visualization Update ---
+    const cDeepOcean = new THREE.Color(0x0a3b68);
+    const cShallowOcean = new THREE.Color(0x1a8cb8);
+    const cFloodSilt = new THREE.Color(0x356372);
+    const cWhiteFoam = new THREE.Color(0xffffff);
+    const cWaterTemp = new THREE.Color();
+
+    function updateWaterMesh() {
+      for (let iz = 0; iz < Nz; iz++) {
+        for (let ix = 0; ix < Nx; ix++) {
+          const idx = iz * Nx + ix;
+          const vertIdx = idx;
+          const zb = elev[idx];
+          const hVal = waterH[idx];
+          const uVal = u[idx];
+          const vVal = v[idx];
+          const flowSpeed = Math.sqrt(uVal * uVal + vVal * vVal);
+
+          if (hVal > 0.03) {
+            // Surface level Y
+            const surfY = zb + hVal;
+            waterPos.setY(vertIdx, surfY);
+
+            // Water surface coloring & foam
+            if (isOcean[idx]) {
+              const depthRatio = Math.min(1.0, hVal / 10.0);
+              cWaterTemp.copy(cShallowOcean).lerp(cDeepOcean, depthRatio);
+            } else {
+              // Overland murky floodwater
+              cWaterTemp.copy(cFloodSilt);
+            }
+
+            // Advancing foam crest: when wave front is steep or flow velocity is high
+            const isWaveFront = (flowSpeed > 1.8 || (ix > 2 && Math.abs(waterH[idx] - waterH[idx - 1]) > 0.8));
+            if (isWaveFront) {
+              const foamFactor = Math.min(1.0, flowSpeed / 6.0);
+              cWaterTemp.lerp(cWhiteFoam, foamFactor * 0.85);
+
+              // Spawn dynamic foam splashes
+              if (Math.random() < 0.08 && SIM.active) {
+                const w = gridToWorld(ix, iz);
+                spawnSplash(w.x, surfY, w.z, uVal, vVal);
+              }
+            }
+          } else {
+            // Dry land: place vertex slightly below ground to avoid z-fighting
+            waterPos.setY(vertIdx, zb - 0.15);
+            cWaterTemp.setHex(0x0a3b68);
+          }
+
+          waterColors[vertIdx * 3 + 0] = cWaterTemp.r;
+          waterColors[vertIdx * 3 + 1] = cWaterTemp.g;
+          waterColors[vertIdx * 3 + 2] = cWaterTemp.b;
+        }
+      }
+
+      waterGeo.attributes.position.needsUpdate = true;
+      waterGeo.attributes.color.needsUpdate = true;
+      waterGeo.computeVertexNormals();
+    }
+
+    // --- 10. Disaster Telemetry & Real-Time Analytics ---
+    const floodedPctEl = document.getElementById('flooded-pct-val');
+    const floodProgressBar = document.getElementById('flood-progress-bar');
+    const peakDepthEl = document.getElementById('peak-depth-val');
+    const inlandDistEl = document.getElementById('inland-dist-val');
+    const floodedBuildingsEl = document.getElementById('flooded-buildings-val');
+    const floodedBuildingsSub = document.getElementById('flooded-buildings-sub');
+    const displacedCarsEl = document.getElementById('displaced-cars-val');
+    const displacedCarsSub = document.getElementById('displaced-cars-sub');
+    const evacueesSafeEl = document.getElementById('evacuees-safe-val');
+    const evacueesSweptEl = document.getElementById('evacuees-swept-val');
+    const elapsedTimeEl = document.getElementById('elapsed-time-val');
+    const statusTextEl = document.getElementById('sim-status-text');
+    const statusBadgeEl = document.getElementById('sim-status-badge');
+    const warningBanner = document.getElementById('warning-banner');
+    const sparklineCanvas = document.getElementById('flood-canvas-graph');
+    const sparklineCtx = sparklineCanvas.getContext('2d');
+
+    // Resize sparkline canvas
+    function resizeSparkline() {
+      sparklineCanvas.width = sparklineCanvas.clientWidth * window.devicePixelRatio;
+      sparklineCanvas.height = sparklineCanvas.clientHeight * window.devicePixelRatio;
+    }
+    window.addEventListener('resize', resizeSparkline);
+    setTimeout(resizeSparkline, 100);
+
+    function drawSparkline() {
+      const w = sparklineCanvas.width;
+      const h = sparklineCanvas.height;
+      sparklineCtx.clearRect(0, 0, w, h);
+
+      if (SIM.history.length < 2) return;
+
+      // Draw grid lines
+      sparklineCtx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      sparklineCtx.lineWidth = 1;
+      sparklineCtx.beginPath();
+      sparklineCtx.moveTo(0, h * 0.5);
+      sparklineCtx.lineTo(w, h * 0.5);
+      sparklineCtx.stroke();
+
+      // Draw flood history curve
+      sparklineCtx.beginPath();
+      const n = SIM.history.length;
+      const maxPts = 120;
+      const startIdx = Math.max(0, n - maxPts);
+      const visiblePts = n - startIdx;
+
+      for (let i = 0; i < visiblePts; i++) {
+        const val = SIM.history[startIdx + i]; // 0 to 100%
+        const px = (i / (visiblePts - 1)) * w;
+        const py = h - (val / 100.0) * (h * 0.88) - h * 0.06;
+        if (i === 0) sparklineCtx.moveTo(px, py);
+        else sparklineCtx.lineTo(px, py);
+      }
+
+      sparklineCtx.strokeStyle = '#38bdf8';
+      sparklineCtx.lineWidth = 2.5 * window.devicePixelRatio;
+      sparklineCtx.stroke();
+
+      // Gradient fill below line
+      sparklineCtx.lineTo(w, h);
+      sparklineCtx.lineTo(0, h);
+      sparklineCtx.closePath();
+      const grad = sparklineCtx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, 'rgba(56, 189, 248, 0.35)');
+      grad.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+      sparklineCtx.fillStyle = grad;
+      sparklineCtx.fill();
+    }
+
+    function updateTelemetry() {
+      // 1. Calculate Flooded Land Area % (strictly non-ocean land cells with water depth > 0.05m)
+      let floodedCount = 0;
+      let maxWaterY = 0.0;
+      let maxInlandX = -22.0;
+
+      for (let iz = 0; iz < Nz; iz++) {
+        for (let ix = 0; ix < Nx; ix++) {
+          const idx = iz * Nx + ix;
+          const zb = elev[idx];
+          const hVal = waterH[idx];
+
+          // Check peak water surface level above normal sea level (0.0m)
+          if (hVal > 0.05) {
+            const surfY = zb + hVal;
+            if (surfY > maxWaterY) {
+              maxWaterY = surfY;
+            }
+          }
+
+          // Strictly land cells
+          if (isLand[idx] && hVal > 0.05) {
+            floodedCount++;
+            const w = gridToWorld(ix, iz);
+            if (w.x > maxInlandX) {
+              maxInlandX = w.x;
+            }
+          }
+        }
+      }
+
+      SIM.floodedPct = totalLandCells > 0 ? (floodedCount / totalLandCells) * 100.0 : 0.0;
+      SIM.inundationPeak = Math.max(SIM.inundationPeak, maxWaterY);
+
+      const shoreLineX = -22.0;
+      const inlandDist = Math.max(0.0, Math.round(maxInlandX - shoreLineX));
+      SIM.inlandMaxDist = Math.max(SIM.inlandMaxDist, inlandDist);
+
+      // 2. Flooded Buildings
+      let bFloodedCount = 0;
+      for (let i = 0; i < buildings.length; i++) {
+        const b = buildings[i];
+        const hAtBuilding = sampleField(waterH, b.x, b.z);
+        if (hAtBuilding > 0.25) {
+          b.flooded = true;
+          b.maxWaterDepth = Math.max(b.maxWaterDepth, hAtBuilding);
+          bFloodedCount++;
+        }
+      }
+      SIM.floodedBuildings = bFloodedCount;
+
+      // Update building watermarks
+      for (let i = 0; i < buildingWaterMarks.length; i++) {
+        const { ringMesh, bData } = buildingWaterMarks[i];
+        if (bData.flooded) {
+          ringMesh.material.opacity = Math.min(0.9, bData.maxWaterDepth / 3.0);
+          ringMesh.position.y = -bData.height / 2 + Math.min(bData.height * 0.9, bData.maxWaterDepth);
+        } else {
+          ringMesh.material.opacity = 0.0;
+        }
+      }
+
+      // 3. Displaced Vehicles
+      let carDisplacedCount = 0;
+      for (let i = 0; i < vehicles.length; i++) {
+        if (vehicles[i].isDisplaced) carDisplacedCount++;
+      }
+      SIM.displacedCars = carDisplacedCount;
+
+      // 4. Evacuee Status
+      let safeCount = 0;
+      let sweptCount = 0;
+      for (let i = 0; i < evacuees.length; i++) {
+        if (evacuees[i].state === 'safe') safeCount++;
+        else if (evacuees[i].state === 'swept') sweptCount++;
+      }
+      SIM.evacueesSafe = safeCount;
+      SIM.evacueesSwept = sweptCount;
+
+      // 5. Update DOM elements
+      floodedPctEl.textContent = SIM.floodedPct.toFixed(1);
+      floodProgressBar.style.width = `${Math.min(100, SIM.floodedPct)}%`;
+      peakDepthEl.textContent = `${SIM.inundationPeak.toFixed(1)} m`;
+      inlandDistEl.textContent = `${SIM.inlandMaxDist} m`;
+
+      floodedBuildingsEl.textContent = `${SIM.floodedBuildings} / ${buildings.length}`;
+      const bPct = Math.round((SIM.floodedBuildings / buildings.length) * 100);
+      floodedBuildingsSub.textContent = `${bPct}% affected`;
+
+      displacedCarsEl.textContent = `${SIM.displacedCars} / ${vehicles.length}`;
+      displacedCarsSub.textContent = SIM.displacedCars > 0 ? "Floated & carried" : "Stationary";
+
+      evacueesSafeEl.textContent = `${SIM.evacueesSafe} / ${evacuees.length}`;
+      evacueesSweptEl.textContent = `${SIM.evacueesSwept} / ${evacuees.length}`;
+
+      elapsedTimeEl.textContent = `T+ ${SIM.time.toFixed(1)}s`;
+
+      // Status Badge
+      if (!SIM.active) {
+        statusTextEl.textContent = "Ready / Calm";
+        statusBadgeEl.className = "status-badge";
+        warningBanner.classList.remove('visible');
+      } else {
+        warningBanner.classList.add('visible');
+        if (SIM.time < 5.0) {
+          statusTextEl.textContent = "TSUNAMI APPROACHING";
+          statusBadgeEl.className = "status-badge warning";
+        } else if (SIM.time < 22.0) {
+          statusTextEl.textContent = "CRITICAL INUNDATION";
+          statusBadgeEl.className = "status-badge alert";
+        } else {
+          statusTextEl.textContent = "WATER RECEDING";
+          statusBadgeEl.className = "status-badge warning";
+        }
+      }
+
+      // Record Sparkline History every 0.25s
+      if (SIM.active && Math.floor(SIM.time * 4) !== Math.floor((SIM.time - 0.04) * 4)) {
+        SIM.history.push(SIM.floodedPct);
+        drawSparkline();
+      }
+    }
+
+    // --- 11. Camera System & Presets ---
+    const cameraTargets = {
+      orbit: { pos: new THREE.Vector3(-68, 38, 62), look: new THREE.Vector3(5, 5, 0) },
+      shore: { pos: new THREE.Vector3(-11, 4.2, 4), look: new THREE.Vector3(-45, 6, -10) },
+      aerial: { pos: new THREE.Vector3(2, 115, 10), look: new THREE.Vector3(2, 0, 0) },
+      shelter: { pos: new THREE.Vector3(68, 28, 22), look: new THREE.Vector3(-10, 4, 0) },
+      vehicle: { pos: new THREE.Vector3(-10, 8, 22), look: new THREE.Vector3(-14, 2, 5) }
+    };
+
+    let targetCamPos = cameraTargets.orbit.pos.clone();
+    let targetCamLook = cameraTargets.orbit.look.clone();
+    let isTransitioningCam = false;
+
+    function setCameraPreset(preset) {
+      SIM.cameraMode = preset;
+      if (preset === 'vehicle') {
+        controls.enabled = false;
+      } else {
+        controls.enabled = true;
+        targetCamPos.copy(cameraTargets[preset].pos);
+        targetCamLook.copy(cameraTargets[preset].look);
+        isTransitioningCam = true;
+      }
+    }
+
+    function updateCamera(dt) {
+      if (SIM.cameraMode === 'vehicle') {
+        // Track the Yellow School Bus (vehicles[3]) or Police Car (vehicles[4])
+        const targetVeh = vehicles[3] || vehicles[0];
+        if (targetVeh) {
+          const vPos = targetVeh.mesh.position;
+          const chasePos = new THREE.Vector3(vPos.x + 8.0, vPos.y + 5.5, vPos.z + 8.0);
+          camera.position.lerp(chasePos, 0.08);
+          controls.target.lerp(vPos, 0.12);
+        }
+      } else if (isTransitioningCam) {
+        camera.position.lerp(targetCamPos, 0.08);
+        controls.target.lerp(targetCamLook, 0.08);
+        if (camera.position.distanceTo(targetCamPos) < 0.5) {
+          isTransitioningCam = false;
+        }
+      }
+      controls.update();
+    }
+
+    // --- 12. Reset & Event Handlers ---
+    function resetSimulation() {
+      SIM.active = false;
+      SIM.paused = false;
+      SIM.time = 0.0;
+      SIM.inundationPeak = 0.0;
+      SIM.inlandMaxDist = 0.0;
+      SIM.floodedPct = 0.0;
+      SIM.floodedBuildings = 0;
+      SIM.displacedCars = 0;
+      SIM.history = [];
+
+      // Reset water grid to calm sea level
+      for (let i = 0; i < Nx * Nz; i++) {
+        waterH[i] = waterH0[i];
+        u[i] = 0.0;
+        v[i] = 0.0;
+        Qx[i] = 0.0;
+        Qz[i] = 0.0;
+      }
+
+      // Reset vehicles & evacuees
+      vehicles.forEach(v => v.reset());
+      evacuees.forEach(e => e.reset());
+      buildings.forEach(b => {
+        b.flooded = false;
+        b.maxWaterDepth = 0.0;
+      });
+
+      // Clear particles
+      for (let p = 0; p < particleCount; p++) {
+        particleLifes[p] = 0.0;
+        particlePositions[p * 3 + 1] = -100;
+      }
+      particleGeo.attributes.position.needsUpdate = true;
+
+      // Update 3D meshes & telemetry
+      updateWaterMesh();
+      updateTerrainColors();
+      updateTelemetry();
+      drawSparkline();
+      updateAudioVolume();
+
+      // UI button state
+      const startBtn = document.getElementById('start-tsunami-btn');
+      startBtn.classList.remove('active');
+      document.getElementById('start-btn-label').textContent = 'START TSUNAMI';
+    }
+
+    function toggleTsunami() {
+      initAudio();
+      SIM.active = !SIM.active;
+
+      const startBtn = document.getElementById('start-tsunami-btn');
+      if (SIM.active) {
+        startBtn.classList.add('active');
+        document.getElementById('start-btn-label').textContent = 'STOP TSUNAMI';
+      } else {
+        startBtn.classList.remove('active');
+        document.getElementById('start-btn-label').textContent = 'RESUME TSUNAMI';
+      }
+      updateAudioVolume();
+    }
+
+    // --- UI Controls Event Binding ---
+    document.getElementById('start-tsunami-btn').addEventListener('click', toggleTsunami);
+    document.getElementById('reset-sim-btn').addEventListener('click', resetSimulation);
+
+    // Wave Height Slider
+    const waveSlider = document.getElementById('wave-height-slider');
+    const waveValDisplay = document.getElementById('wave-val-display');
+    const waveCatTag = document.getElementById('wave-category-tag');
+
+    function setWaveHeight(val) {
+      SIM.waveHeight = parseFloat(val);
+      waveSlider.value = val;
+      waveValDisplay.textContent = SIM.waveHeight.toFixed(1);
+
+      if (SIM.waveHeight <= 3.5) waveCatTag.textContent = "Cat. 1 Minor Overwash";
+      else if (SIM.waveHeight <= 8.5) waveCatTag.textContent = "Cat. 3 Moderate Breach";
+      else if (SIM.waveHeight <= 14.5) waveCatTag.textContent = "Cat. 4 Severe Inundation";
+      else waveCatTag.textContent = "Cat. 5 Mega-Tsunami";
+    }
+
+    waveSlider.addEventListener('input', (e) => setWaveHeight(e.target.value));
+
+    // Preset Buttons
+    document.querySelectorAll('.btn-preset').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.btn-preset').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        setWaveHeight(btn.getAttribute('data-h'));
+      });
+    });
+
+    // Speed Controls
+    document.querySelectorAll('[data-speed]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-speed]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        SIM.simSpeed = parseFloat(btn.getAttribute('data-speed'));
+        SIM.paused = false;
+        document.getElementById('pause-btn').textContent = "⏸ Pause";
+      });
+    });
+
+    // Pause Button
+    const pauseBtn = document.getElementById('pause-btn');
+    pauseBtn.addEventListener('click', () => {
+      SIM.paused = !SIM.paused;
+      pauseBtn.textContent = SIM.paused ? "▶ Resume" : "⏸ Pause";
+      pauseBtn.style.color = SIM.paused ? "#34d399" : "#f87171";
+    });
+
+    // Camera Preset Buttons
+    document.querySelectorAll('[data-cam]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-cam]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        setCameraPreset(btn.getAttribute('data-cam'));
+      });
+    });
+
+    // Overlay Mode Buttons
+    document.querySelectorAll('[data-mode]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        SIM.overlayMode = btn.getAttribute('data-mode');
+        updateTerrainColors();
+      });
+    });
+
+    // Sound Toggle
+    const soundBtn = document.getElementById('sound-btn');
+    soundBtn.addEventListener('click', () => {
+      initAudio();
+      SIM.audioEnabled = !SIM.audioEnabled;
+      soundBtn.textContent = SIM.audioEnabled ? "🔊" : "🔇";
+      updateAudioVolume();
+    });
+
+    // Fullscreen Toggle
+    document.getElementById('fullscreen-btn').addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+      } else {
+        document.exitFullscreen();
+      }
+    });
+
+    // Window Resize Handler
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.0));
+    });
+
+    // --- 13. Main Simulation & Animation Loop ---
+    let lastTime = performance.now();
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const now = performance.now();
+      const rawDt = Math.min(0.06, (now - lastTime) / 1000.0);
+      lastTime = now;
+
+      // Sub-stepping for physics accuracy & rock-solid stability
+      if (SIM.active && !SIM.paused) {
+        const effectiveDt = rawDt * SIM.simSpeed;
+        const subSteps = 2;
+        const dtSub = effectiveDt / subSteps;
+
+        for (let s = 0; s < subSteps; s++) {
+          stepHydrodynamics(dtSub);
+        }
+
+        // Update Vehicles & Evacuees
+        vehicles.forEach(v => v.update(effectiveDt));
+        evacuees.forEach(e => e.update(effectiveDt));
+        updateParticles(effectiveDt);
+
+        // Update Water Surface Mesh
+        updateWaterMesh();
+
+        // Update Overlay if dynamic mode selected
+        if (SIM.overlayMode === 'depth' || SIM.overlayMode === 'flow') {
+          updateTerrainColors();
+        }
+
+        // Telemetry & Audio
+        updateTelemetry();
+        updateAudioVolume();
+      }
+
+      // Blinking Emergency Tower Beacon
+      beaconLight.intensity = Math.sin(now * 0.007) > 0.3 ? 3.0 : 0.2;
+      beaconMesh.material.color.setHex(beaconLight.intensity > 1.0 ? 0xef4444 : 0x450a0a);
+
+      // Camera transitions
+      updateCamera(rawDt);
+
+      // Render Scene
+      renderer.render(scene, camera);
+    }
+
+    // Launch Application
+    updateWaterMesh();
+    updateTelemetry();
+    drawSparkline();
+    animate();
+    console.log("🌊 TSUNAMI SIMULATOR 3D Initialized Successfully.");
+  </script>
+</body>
+</html>

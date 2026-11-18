@@ -1,0 +1,166 @@
+:root {
+  color-scheme: dark;
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #10141a;
+}
+
+.app {
+  position: fixed;
+  inset: 0;
+}
+
+.app canvas {
+  display: block;
+  touch-action: none;
+}
+
+.ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-start;
+  padding: 20px;
+  gap: 10px;
+}
+
+.panel {
+  pointer-events: auto;
+  width: 260px;
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(18, 23, 29, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.brand-mark {
+  width: 11px;
+  height: 11px;
+  background: #8fae52;
+  box-shadow: 4px 4px 0 rgba(143, 174, 82, 0.35);
+}
+
+.brand-text {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2.4px;
+  color: #e9eef2;
+}
+
+.readouts {
+  display: flex;
+  gap: 10px;
+}
+
+.readout {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.label {
+  font-size: 9px;
+  letter-spacing: 1.4px;
+  color: #7f8b95;
+}
+
+.value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #cfe0a8;
+  font-variant-numeric: tabular-nums;
+}
+
+.buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.btn {
+  pointer-events: auto;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #cfd6dc;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.1px;
+  padding: 9px 4px;
+  border-radius: 9px;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.1s ease;
+}
+
+.btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn.active {
+  background: #7f9c47;
+  border-color: #a4c164;
+  color: #0f130a;
+  box-shadow: 0 0 0 1px rgba(164, 193, 100, 0.35);
+}
+
+.btn.reset {
+  width: 100%;
+  letter-spacing: 1.6px;
+}
+
+.hint {
+  pointer-events: none;
+  font-size: 10px;
+  letter-spacing: 1.6px;
+  color: rgba(220, 230, 238, 0.42);
+  padding-left: 4px;
+}
+
+@media (max-width: 520px) {
+  .panel {
+    width: 100%;
+  }
+  .ui {
+    padding: 12px;
+  }
+}
